@@ -1,0 +1,9 @@
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: ha-assist-script-tools-test:py3.14
+    volumes:
+      - .:/workspace:ro
+    command: ["-p", "no:cacheprovider"]

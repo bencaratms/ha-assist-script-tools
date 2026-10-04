@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create an Assist script tool",
+        "description": "Configure one script wrapper. Resolved fields must be JSON, for example: [{\"input_name\":\"speaker\",\"script_field\":\"media_player_entity_id\",\"domains\":[\"media_player\"],\"multiple\":false}].",
+        "data": {
+          "script_entity_id": "Script",
+          "tool_name": "Tool name",
+          "description": "Tool description",
+          "resolved_fields": "Resolved field mappings"
+        }
+      }
+    },
+    "error": {
+      "script_not_found": "The selected script does not exist.",
+      "invalid_json": "Resolved field mappings must be valid JSON.",
+      "not_a_list": "Resolved field mappings must be a JSON list.",
+      "invalid_mapping": "Each mapping needs unique input_name and script_field strings, a non-empty domains list, and an optional boolean multiple value."
+    }
+  }
+}

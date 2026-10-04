@@ -1,0 +1,12 @@
+{
+  "domain": "assist_script_tools",
+  "name": "Assist Script Tools",
+  "after_dependencies": ["intent", "llm", "script"],
+  "codeowners": ["@bencaratms"],
+  "config_flow": true,
+  "documentation": "https://github.com/bencaratms/ha-assist-script-tools",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/bencaratms/ha-assist-script-tools/issues",
+  "version": "0.1.0"
+}
