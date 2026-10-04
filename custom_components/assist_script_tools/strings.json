@@ -20,10 +20,10 @@
       },
       "edit_parameter": {
         "title": "Configure script parameter",
-        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID.",
+        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID. For an LLM parameter name, use the human concept, such as speaker, rather than the source entity-ID field name, such as media_player_entity_id.",
         "data": {
           "mode": "Parameter mode",
-          "input_name": "LLM parameter name",
+          "input_name": "LLM parameter name (no spaces)",
           "domains": "Allowed entity domains",
           "multiple": "Allow multiple targets"
         }
@@ -61,10 +61,10 @@
       },
       "edit_parameter": {
         "title": "Configure script parameter",
-        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID.",
+        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID. For an LLM parameter name, use the human concept, such as speaker, rather than the source entity-ID field name, such as media_player_entity_id.",
         "data": {
           "mode": "Parameter mode",
-          "input_name": "LLM parameter name",
+          "input_name": "LLM parameter name (no spaces)",
           "domains": "Allowed entity domains",
           "multiple": "Allow multiple targets"
         }

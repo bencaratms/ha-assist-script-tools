@@ -42,7 +42,10 @@ Create one integration entry for each script to expose:
 5. Choose **Save tool** to create the integration entry.
 
 Each mapping has:
-   - `input_name`: the human-friendly LLM parameter.
+   - `input_name`: the LLM parameter. Name the human concept, such as
+     `speaker` or `media_player`, rather than copying an entity-ID-oriented
+     source field name such as `media_player_entity_id`. It must contain no
+     spaces; use letters, numbers, and underscores.
    - `script_field`: the parameter accepted by the source script.
    - `domains`: allowed target domains.
    - `multiple`: whether the tool may resolve more than one target.
