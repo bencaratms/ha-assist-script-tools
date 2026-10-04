@@ -16,6 +16,7 @@ from custom_components.assist_script_tools.config_flow import (
     ACTION_SAVE,
     MODE_MAPPED,
     ConfigFlow,
+    ScriptToolOptionsFlow,
     _validate_resolved_fields,
 )
 from custom_components.assist_script_tools.const import (
@@ -153,8 +154,8 @@ async def test_json_editor_returns_to_primary_form(hass) -> None:
     assert result["step_id"] == "configure"
 
 
-async def test_duplicate_wrapper_aborts_on_save(hass) -> None:
-    """Reject an existing script and tool-name combination."""
+async def test_duplicate_wrapper_returns_to_configuration_form(hass) -> None:
+    """Keep the form open when the script and tool name already exist."""
     MockConfigEntry(
         domain=DOMAIN,
         unique_id="script.verify_target_resolution:verify_target_resolution",
@@ -173,5 +174,45 @@ async def test_duplicate_wrapper_aborts_on_save(hass) -> None:
             },
         )
 
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "configure"
+    assert result["errors"] == {CONF_TOOL_NAME: "already_configured"}
+    assert result["description_placeholders"]["message"] == (
+        "The script tool verify_target_resolution already exists. "
+    )
+
+
+async def test_options_flow_updates_existing_entry(hass) -> None:
+    """Reconfigure an existing tool without recreating its config entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Verify target resolution",
+        data={
+            CONF_SCRIPT_ENTITY_ID: "script.verify_target_resolution",
+            CONF_TOOL_NAME: "verify_target_resolution",
+            "description": "Original description.",
+            CONF_RESOLVED_FIELDS: [MAPPING],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    with patch.object(
+        ScriptToolOptionsFlow, "_async_load_script", _load_test_script
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "configure"
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                CONF_TOOL_NAME: "verify_kitchen_target",
+                "description": "Updated description.",
+                "parameter": "target_entity_id",
+                "action": ACTION_SAVE,
+            },
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_TOOL_NAME] == "verify_kitchen_target"
+    assert entry.data["description"] == "Updated description."
+    assert entry.data[CONF_RESOLVED_FIELDS] == [MAPPING]

@@ -10,7 +10,7 @@
       },
       "configure": {
         "title": "Configure Assist script tool",
-        "description": "Select a parameter and choose an action. Mapped parameters resolve a human-friendly target; pass-through parameters retain the source script behavior.",
+        "description": "{message}Select a parameter and choose an action. Mapped parameters resolve a human-friendly target; pass-through parameters retain the source script behavior.",
         "data": {
           "tool_name": "Tool name",
           "description": "Tool description",
@@ -43,7 +43,42 @@
       "invalid_json": "Resolved field mappings must be valid JSON.",
       "not_a_list": "Resolved field mappings must be a JSON list.",
       "invalid_mapping": "Each mapping needs unique input_name and script_field strings, a non-empty domains list, and an optional boolean multiple value.",
-      "unknown_script_field": "Each mapped script field must be declared by the selected script."
+      "unknown_script_field": "Each mapped script field must be declared by the selected script.",
+      "already_configured": "Tool names must be unique."
+    }
+  },
+  "options": {
+    "step": {
+      "configure": {
+        "title": "Configure Assist script tool",
+        "description": "{message}Select a parameter and choose an action. Mapped parameters resolve a human-friendly target; pass-through parameters retain the source script behavior.",
+        "data": {
+          "tool_name": "Tool name",
+          "description": "Tool description",
+          "parameter": "Script parameter",
+          "action": "Next action"
+        }
+      },
+      "edit_parameter": {
+        "title": "Configure script parameter",
+        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID.",
+        "data": {
+          "mode": "Parameter mode",
+          "input_name": "LLM parameter name",
+          "domains": "Allowed entity domains",
+          "multiple": "Allow multiple targets"
+        }
+      },
+      "advanced": {
+        "title": "Edit mappings as JSON",
+        "description": "This replaces the mappings configured in the parameter editor. Updating returns to the main configuration form.",
+        "data": {
+          "resolved_fields": "Resolved field mappings"
+        }
+      }
+    },
+    "abort": {
+      "source_script_unavailable": "The configured source script is unavailable or no longer declares fields."
     }
   }
 }

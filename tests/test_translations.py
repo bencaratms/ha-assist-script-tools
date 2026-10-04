@@ -35,6 +35,17 @@ def test_config_flow_translations_do_not_use_format_arguments(
     translations = json.loads(translation_file.read_text(encoding="utf-8"))
 
     assert all(
-        "{" not in value and "}" not in value
+        "{" not in value.replace("{message}", "")
+        and "}" not in value.replace("{message}", "")
         for value in _string_values(translations["config"])
     )
+
+
+@pytest.mark.parametrize("translation_file", TRANSLATION_FILES)
+def test_config_flow_translations_define_duplicate_entry_error(
+    translation_file: Path,
+) -> None:
+    """Provide the message required by the duplicate-entry guard."""
+    translations = json.loads(translation_file.read_text(encoding="utf-8"))
+
+    assert translations["config"]["error"]["already_configured"]

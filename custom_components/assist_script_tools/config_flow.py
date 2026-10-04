@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.script import DOMAIN as SCRIPT_DOMAIN
 from homeassistant.const import CONF_DESCRIPTION
-from homeassistant.core import split_entity_id
+from homeassistant.core import callback, split_entity_id
 from homeassistant.helpers import selector, service
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
@@ -75,6 +75,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize the configuration flow."""
+        self._initialize_flow_state()
+
+    def _initialize_flow_state(self) -> None:
+        """Initialize state shared by create and options flows."""
         self._script_entity_id: str | None = None
         self._tool_name: str | None = None
         self._description: str | None = None
@@ -82,6 +86,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._resolved_fields: list[dict[str, Any]] = []
         self._script_fields: dict[str, dict[str, Any]] = {}
         self._editing_script_field: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> ScriptToolOptionsFlow:
+        """Return the options flow for an existing script tool."""
+        return ScriptToolOptionsFlow(config_entry)
 
     async def _async_load_script(self, script_entity_id: str) -> bool:
         """Load the source script's metadata and parameters."""
@@ -167,12 +179,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_configure(
-        self, user_input: dict[str, Any] | None = None
+        self,
+        user_input: dict[str, Any] | None = None,
+        errors: dict[str, str] | None = None,
+        message: str = "",
     ) -> config_entries.ConfigFlowResult:
         """Configure the tool and select the next native flow action."""
         assert self._script_entity_id is not None
 
-        errors: dict[str, str] = {}
         if user_input is not None:
             self._tool_name = user_input[CONF_TOOL_NAME]
             self._description = user_input[CONF_DESCRIPTION]
@@ -242,7 +256,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
-            errors=errors,
+            errors=errors or {},
+            description_placeholders={"message": message},
         )
 
     async def async_step_edit_parameter(
@@ -377,8 +392,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         assert self._tool_name is not None
         assert self._description is not None
 
+        if self._existing_entry():
+            return await self.async_step_configure(
+                errors={CONF_TOOL_NAME: "already_configured"},
+                message=f"The script tool {self._tool_name} already exists. ",
+            )
+
         await self.async_set_unique_id(f"{self._script_entity_id}:{self._tool_name}")
-        self._abort_if_unique_id_configured()
         return self.async_create_entry(
             title=self._tool_name.replace("_", " ").title(),
             data={
@@ -388,3 +408,73 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_RESOLVED_FIELDS: self._resolved_fields,
             },
         )
+
+    def _existing_entry(self) -> config_entries.ConfigEntry | None:
+        """Return another entry with this source script and tool name."""
+        assert self._script_entity_id is not None
+        assert self._tool_name is not None
+        return self.hass.config_entries.async_entry_for_domain_unique_id(
+            DOMAIN, f"{self._script_entity_id}:{self._tool_name}"
+        )
+
+
+class ScriptToolOptionsFlow(config_entries.OptionsFlow):
+    """Reconfigure an existing Assist script tool."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize the options flow from saved entry data."""
+        self._config_entry = config_entry
+        self._initialize_flow_state()
+        self._script_entity_id = config_entry.data[CONF_SCRIPT_ENTITY_ID]
+        self._tool_name = config_entry.data[CONF_TOOL_NAME]
+        self._description = config_entry.data[CONF_DESCRIPTION]
+        self._resolved_fields = list(config_entry.data[CONF_RESOLVED_FIELDS])
+
+    _initialize_flow_state = ConfigFlow._initialize_flow_state
+    _async_load_script = ConfigFlow._async_load_script
+    _selector_domains = staticmethod(ConfigFlow._selector_domains)
+    _selector_multiple = staticmethod(ConfigFlow._selector_multiple)
+    _mapping_for = ConfigFlow._mapping_for
+    _available_domains = ConfigFlow._available_domains
+    _parameter_label = ConfigFlow._parameter_label
+    _existing_entry = ConfigFlow._existing_entry
+    async_step_configure = ConfigFlow.async_step_configure
+    async_step_edit_parameter = ConfigFlow.async_step_edit_parameter
+    async_step_advanced = ConfigFlow.async_step_advanced
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Load the configured source script and open the editor."""
+        assert self._script_entity_id is not None
+        if not await self._async_load_script(self._script_entity_id):
+            return self.async_abort(reason="source_script_unavailable")
+        return await self.async_step_configure()
+
+    async def async_step_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Persist the edited configuration on the existing entry."""
+        assert self._script_entity_id is not None
+        assert self._tool_name is not None
+        assert self._description is not None
+
+        if (existing_entry := self._existing_entry()) and (
+            existing_entry.entry_id != self._config_entry.entry_id
+        ):
+            return await self.async_step_configure(
+                errors={CONF_TOOL_NAME: "already_configured"},
+                message=f"The script tool {self._tool_name} already exists. ",
+            )
+
+        self.hass.config_entries.async_update_entry(
+            self._config_entry,
+            title=self._tool_name.replace("_", " ").title(),
+            data={
+                CONF_SCRIPT_ENTITY_ID: self._script_entity_id,
+                CONF_TOOL_NAME: self._tool_name,
+                CONF_DESCRIPTION: self._description,
+                CONF_RESOLVED_FIELDS: self._resolved_fields,
+            },
+        )
+        return self.async_create_entry(title="", data={})
