@@ -18,7 +18,7 @@
       },
       "menu": {
         "title": "Configure resolved fields",
-        "description": "Fields mapped for target resolution: {mapped_fields}",
+        "description": "Add, edit, remove, or bulk-edit target resolution mappings.",
         "menu_options": {
           "add_field": "Add a resolved field",
           "edit_field": "Edit or remove a resolved field",

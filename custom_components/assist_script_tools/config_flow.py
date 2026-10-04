@@ -190,12 +190,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(
             step_id="menu",
             menu_options=menu_options,
-            description_placeholders={
-                "mapped_fields": ", ".join(
-                    mapping["script_field"] for mapping in self._resolved_fields
-                )
-                or "None",
-            },
         )
 
     async def async_step_add_field(
