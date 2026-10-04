@@ -218,11 +218,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Local Home Assistant UI test environment
-dev/homeassistant/.HA_VERSION
-dev/homeassistant/.storage/
-dev/homeassistant/deps/
-dev/homeassistant/home-assistant_v2.db*
-dev/homeassistant/home-assistant.log*
-dev/homeassistant/tts/

@@ -1,0 +1,4 @@
+# Home Assistant creates all other files in this directory at runtime.
+*
+!.gitignore
+!configuration.yaml

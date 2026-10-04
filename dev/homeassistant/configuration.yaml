@@ -3,17 +3,22 @@ default_config:
 homeassistant:
   name: Assist Script Tools Development
 
+input_boolean:
+  kitchen_speaker:
+    name: Kitchen Speaker
+    icon: mdi:speaker
+
 script:
   verify_target_resolution:
     alias: Verify target resolution
-    description: Verify a selected speaker without playing media.
+    description: Verify a selected target without controlling it.
     fields:
-      media_player_entity_id:
-        name: Target speaker
-        description: Canonical media player entity ID to verify.
+      target_entity_id:
+        name: Target entity
+        description: Canonical entity ID to verify.
         required: true
         selector:
           entity:
-            domain: media_player
+            domain: input_boolean
     sequence:
       - stop: Target received.

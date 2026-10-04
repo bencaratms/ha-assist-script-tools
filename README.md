@@ -85,8 +85,9 @@ docker compose --profile ui up -d homeassistant
 
 Open `http://localhost:8123`, complete Home Assistant's local onboarding, then
 add **Assist Script Tools** from **Settings** > **Devices & services**. The
-included `script.verify_target_resolution` supplies a safe source script for
-testing the configuration flow without controlling media.
+included `script.verify_target_resolution` and `input_boolean.kitchen_speaker`
+supply a safe source script and target for testing the configuration flow
+without controlling devices.
 
 Stop the environment with:
 
