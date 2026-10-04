@@ -31,14 +31,15 @@ with the matched canonical entity ID.
 
 Create one integration entry for each script to expose:
 
-1. Select the existing `script.*` entity, then provide a concise tool name and
-   description.
-2. Select **Add a resolved field** for each script parameter that needs
-   human-friendly entity resolution. The form populates its script-field options
-   from the selected script and its domain options from your existing entities.
-3. Select **Edit mappings as JSON** for bulk editing. Saving the JSON replaces
-   the same mappings shown in the guided form, so you can switch between either
-   view without losing changes.
+1. Select the existing `script.*` entity.
+2. In the main configuration form, review the source-derived tool name and
+   description, then select a script parameter.
+3. Choose **Edit selected parameter** to configure it as **Pass through** or
+   **Resolve a target**. Mapped parameters use a human-friendly target; pass-
+   through parameters retain the source script behavior.
+4. Choose **Edit mappings as JSON** for bulk editing. Updating returns to the
+   same main configuration form, where every parameter reflects the JSON state.
+5. Choose **Save tool** to create the integration entry.
 
 Each mapping has:
    - `input_name`: the human-friendly LLM parameter.

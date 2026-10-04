@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,10 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.assist_script_tools.config_flow import (
+    ACTION_EDIT_JSON,
+    ACTION_EDIT_PARAMETER,
+    ACTION_SAVE,
+    MODE_MAPPED,
     ConfigFlow,
     _validate_resolved_fields,
 )
@@ -21,13 +26,21 @@ from custom_components.assist_script_tools.const import (
 )
 
 SCRIPT_FIELDS = {
-    "media_player_entity_id": "Speaker for the news flash.",
-    "headline": "Optional headline to announce.",
+    "target_entity_id": {
+        "description": "Canonical entity ID to verify.",
+        "domains": ["input_boolean"],
+        "multiple": False,
+    },
+    "message": {
+        "description": "Optional message for the target.",
+        "domains": [],
+        "multiple": False,
+    },
 }
 MAPPING = {
-    "script_field": "media_player_entity_id",
-    "input_name": "speaker",
-    "domains": ["media_player"],
+    "script_field": "target_entity_id",
+    "input_name": "target",
+    "domains": ["input_boolean"],
     "multiple": False,
 }
 
@@ -35,8 +48,8 @@ MAPPING = {
 def test_validate_resolved_fields() -> None:
     """Accept a valid mapping."""
     assert _validate_resolved_fields(
-        '[{"input_name":"speaker","script_field":"media_player_entity_id",'
-        '"domains":["media_player"],"multiple":false}]'
+        '[{"input_name":"target","script_field":"target_entity_id",'
+        '"domains":["input_boolean"],"multiple":false}]'
     ) == [MAPPING]
 
 
@@ -47,150 +60,117 @@ def test_validate_resolved_fields_rejects_invalid_value(value: str) -> None:
         _validate_resolved_fields(value)
 
 
+async def _load_test_script(flow: ConfigFlow, script_entity_id: str) -> bool:
+    """Load predictable script metadata for a config-flow test."""
+    flow._script_entity_id = script_entity_id
+    flow._source_description = "Verify a selected target without controlling it."
+    flow._script_fields = SCRIPT_FIELDS
+    return True
+
+
 async def _start_flow(hass) -> dict[str, object]:
-    """Start a flow through the source-script form."""
-    hass.states.async_set("script.news_flash", "off")
-    hass.states.async_set("media_player.kitchen_speaker", "idle")
+    """Start the flow and reach the primary configuration form."""
+    hass.states.async_set("script.verify_target_resolution", "off")
+    hass.states.async_set("input_boolean.kitchen_speaker", "off")
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
     assert result["type"] is FlowResultType.FORM
-
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_SCRIPT_ENTITY_ID: "script.news_flash"}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "tool"
-    assert result["data_schema"]({}) == {
-        CONF_TOOL_NAME: "news_flash",
-        "description": "Play the news flash on a selected speaker.",
-    }
-
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {
-            CONF_TOOL_NAME: "news_flash",
-            "description": "Play the news flash on a selected speaker.",
-        },
-    )
-    assert result["type"] is FlowResultType.MENU
-    assert "finish" not in result["menu_options"]
-    return result
-
-
-async def _add_field(hass, flow_id: str) -> dict[str, object]:
-    """Add the standard resolved speaker field."""
-    result = await hass.config_entries.flow.async_configure(
-        flow_id, {"next_step_id": "add_field"}
+        {CONF_SCRIPT_ENTITY_ID: "script.verify_target_resolution"},
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "add_field"
-
-    result = await hass.config_entries.flow.async_configure(flow_id, MAPPING)
-    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "configure"
     return result
 
 
-async def test_guided_flow_creates_script_wrapper(hass) -> None:
-    """Create an entry with the guided resolved-field form."""
-    with patch.object(
-        ConfigFlow,
-        "_async_get_script_details",
-        return_value=("Play the news flash on a selected speaker.", SCRIPT_FIELDS),
-    ):
+async def test_primary_form_maps_parameter_and_creates_entry(hass) -> None:
+    """Map a script parameter from the primary configuration form."""
+    with patch.object(ConfigFlow, "_async_load_script", _load_test_script):
         result = await _start_flow(hass)
-        result = await _add_field(hass, result["flow_id"])
+        assert result["data_schema"]({}) == {
+            CONF_TOOL_NAME: "verify_target_resolution",
+            "description": "Verify a selected target without controlling it.",
+            "parameter": "target_entity_id",
+            "action": ACTION_SAVE,
+        }
+
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "finish"}
+            result["flow_id"],
+            {
+                CONF_TOOL_NAME: "verify_target_resolution",
+                "description": "Verify a selected target without controlling it.",
+                "parameter": "target_entity_id",
+                "action": ACTION_EDIT_PARAMETER,
+            },
+        )
+        assert result["step_id"] == "edit_parameter"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                "mode": MODE_MAPPED,
+                "input_name": MAPPING["input_name"],
+                "domains": MAPPING["domains"],
+                "multiple": MAPPING["multiple"],
+            },
+        )
+        assert result["step_id"] == "configure"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_TOOL_NAME: "verify_target_resolution",
+                "description": "Verify a selected target without controlling it.",
+                "parameter": "target_entity_id",
+                "action": ACTION_SAVE,
+            },
         )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_RESOLVED_FIELDS] == [MAPPING]
 
 
-async def test_advanced_json_replaces_guided_mappings(hass) -> None:
-    """Use the Advanced JSON editor after adding a guided mapping."""
-    with patch.object(
-        ConfigFlow,
-        "_async_get_script_details",
-        return_value=("Play the news flash on a selected speaker.", SCRIPT_FIELDS),
-    ):
+async def test_json_editor_returns_to_primary_form(hass) -> None:
+    """Replace mappings in JSON and return to the primary configuration form."""
+    with patch.object(ConfigFlow, "_async_load_script", _load_test_script):
         result = await _start_flow(hass)
-        result = await _add_field(hass, result["flow_id"])
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "advanced"}
+            result["flow_id"],
+            {
+                CONF_TOOL_NAME: "verify_target_resolution",
+                "description": "Verify a selected target without controlling it.",
+                "parameter": "target_entity_id",
+                "action": ACTION_EDIT_JSON,
+            },
         )
-        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "advanced"
-
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {
-                CONF_RESOLVED_FIELDS: (
-                    '[{"input_name":"headline_target",'
-                    '"script_field":"headline",'
-                    '"domains":["media_player"],'
-                    '"multiple":false}]'
-                )
-            },
-        )
-        assert result["type"] is FlowResultType.MENU
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "edit_field"}
-        )
-        assert result["type"] is FlowResultType.FORM
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"script_field": "headline"}
-        )
-        assert result["type"] is FlowResultType.FORM
-        assert result["step_id"] == "edit_field_details"
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {
-                "input_name": "announcement_target",
-                "domains": ["media_player"],
-                "multiple": False,
-                "remove": False,
-            },
-        )
-        assert result["type"] is FlowResultType.MENU
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "finish"}
+            {CONF_RESOLVED_FIELDS: json.dumps([MAPPING])},
         )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_RESOLVED_FIELDS] == [
-        {
-            "input_name": "announcement_target",
-            "script_field": "headline",
-            "domains": ["media_player"],
-            "multiple": False,
-        }
-    ]
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "configure"
 
 
-async def test_guided_flow_rejects_duplicate_wrapper(hass) -> None:
-    """Do not create duplicate script wrappers."""
+async def test_duplicate_wrapper_aborts_on_save(hass) -> None:
+    """Reject an existing script and tool-name combination."""
     MockConfigEntry(
         domain=DOMAIN,
-        unique_id="script.news_flash:news_flash",
-        data={
-            CONF_SCRIPT_ENTITY_ID: "script.news_flash",
-            CONF_TOOL_NAME: "news_flash",
-            "description": "Play news.",
-            CONF_RESOLVED_FIELDS: [],
-        },
+        unique_id="script.verify_target_resolution:verify_target_resolution",
+        data={},
     ).add_to_hass(hass)
 
-    with patch.object(
-        ConfigFlow,
-        "_async_get_script_details",
-        return_value=("Play the news flash on a selected speaker.", SCRIPT_FIELDS),
-    ):
+    with patch.object(ConfigFlow, "_async_load_script", _load_test_script):
         result = await _start_flow(hass)
-        result = await _add_field(hass, result["flow_id"])
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"next_step_id": "finish"}
+            result["flow_id"],
+            {
+                CONF_TOOL_NAME: "verify_target_resolution",
+                "description": "Verify a selected target without controlling it.",
+                "parameter": "target_entity_id",
+                "action": ACTION_SAVE,
+            },
         )
 
     assert result["type"] is FlowResultType.ABORT

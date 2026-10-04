@@ -8,52 +8,29 @@
           "script_entity_id": "Script"
         }
       },
-      "tool": {
-        "title": "Configure the Assist tool",
-        "description": "The description defaults to the selected script's description.",
+      "configure": {
+        "title": "Configure Assist script tool",
+        "description": "Select a parameter and choose an action. Mapped parameters resolve a human-friendly target; pass-through parameters retain the source script behavior.",
         "data": {
           "tool_name": "Tool name",
-          "description": "Tool description"
+          "description": "Tool description",
+          "parameter": "Script parameter",
+          "action": "Next action"
         }
       },
-      "menu": {
-        "title": "Configure resolved fields",
-        "description": "Add, edit, remove, or bulk-edit target resolution mappings.",
-        "menu_options": {
-          "add_field": "Add a resolved field",
-          "edit_field": "Edit or remove a resolved field",
-          "advanced": "Edit mappings as JSON",
-          "finish": "Finish"
-        }
-      },
-      "add_field": {
-        "title": "Add a resolved field",
-        "description": "Choose a script field and the LLM-facing name that will receive a human-friendly target.",
+      "edit_parameter": {
+        "title": "Configure script parameter",
+        "description": "Choose pass through to retain the script parameter unchanged, or resolve a target to replace a friendly name with a canonical entity ID.",
         "data": {
-          "script_field": "Script field",
+          "mode": "Parameter mode",
           "input_name": "LLM parameter name",
           "domains": "Allowed entity domains",
           "multiple": "Allow multiple targets"
         }
       },
-      "edit_field": {
-        "title": "Choose a resolved field",
-        "data": {
-          "script_field": "Resolved script field"
-        }
-      },
-      "edit_field_details": {
-        "title": "Edit resolved field",
-        "data": {
-          "input_name": "LLM parameter name",
-          "domains": "Allowed entity domains",
-          "multiple": "Allow multiple targets",
-          "remove": "Remove this resolved field"
-        }
-      },
       "advanced": {
-        "title": "Edit resolved fields as JSON",
-        "description": "This replaces the mappings configured through the guided form. Return to the previous menu to continue editing with the form.",
+        "title": "Edit mappings as JSON",
+        "description": "This replaces the mappings configured in the parameter editor. Updating returns to the main configuration form.",
         "data": {
           "resolved_fields": "Resolved field mappings"
         }

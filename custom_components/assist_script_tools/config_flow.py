@@ -21,6 +21,12 @@ from .const import (
     DOMAIN,
 )
 
+ACTION_SAVE = "save"
+ACTION_EDIT_PARAMETER = "edit_parameter"
+ACTION_EDIT_JSON = "edit_json"
+MODE_MAPPED = "mapped"
+MODE_PASSTHROUGH = "passthrough"
+
 
 def _validate_resolved_fields(value: str) -> list[dict[str, Any]]:
     """Validate target-field mapping JSON."""
@@ -35,13 +41,12 @@ def _validate_resolved_fields(value: str) -> list[dict[str, Any]]:
     input_names: set[str] = set()
     script_fields: set[str] = set()
     for mapping in mappings:
-        if not isinstance(mapping, dict):
-            raise vol.Invalid("invalid_mapping")
-
-        input_name = mapping.get("input_name")
-        script_field = mapping.get("script_field")
-        domains = mapping.get("domains")
-        multiple = mapping.get("multiple", False)
+        input_name = mapping.get("input_name") if isinstance(mapping, dict) else None
+        script_field = (
+            mapping.get("script_field") if isinstance(mapping, dict) else None
+        )
+        domains = mapping.get("domains") if isinstance(mapping, dict) else None
+        multiple = mapping.get("multiple", False) if isinstance(mapping, dict) else None
         if (
             not isinstance(input_name, str)
             or not input_name.isidentifier()
@@ -58,10 +63,8 @@ def _validate_resolved_fields(value: str) -> list[dict[str, Any]]:
             or script_field in script_fields
         ):
             raise vol.Invalid("invalid_mapping")
-
         input_names.add(input_name)
         script_fields.add(script_field)
-
     return mappings
 
 
@@ -77,234 +80,186 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._description: str | None = None
         self._source_description: str | None = None
         self._resolved_fields: list[dict[str, Any]] = []
-        self._script_fields: dict[str, str] = {}
+        self._script_fields: dict[str, dict[str, Any]] = {}
         self._editing_script_field: str | None = None
 
-    async def _async_get_script_details(
-        self, script_entity_id: str
-    ) -> tuple[str | None, dict[str, str]]:
-        """Return the description and fields exposed by the selected script."""
+    async def _async_load_script(self, script_entity_id: str) -> bool:
+        """Load the source script's metadata and parameters."""
+        if self.hass.states.get(script_entity_id) is None:
+            return False
+
         script_name = split_entity_id(script_entity_id)[1]
         entity_entry = async_get_entity_registry(self.hass).async_get(script_entity_id)
         if entity_entry and entity_entry.unique_id:
             script_name = entity_entry.unique_id
 
         descriptions = await service.async_get_all_descriptions(self.hass)
-        script_description = descriptions.get(SCRIPT_DOMAIN, {}).get(
-            script_name, {}
+        script = descriptions.get(SCRIPT_DOMAIN, {}).get(script_name, {})
+        fields = script.get("fields", {})
+        if not fields:
+            return False
+
+        self._script_entity_id = script_entity_id
+        self._source_description = script.get("description")
+        self._script_fields = {
+            name: {
+                "description": config.get("description")
+                or config.get("name")
+                or name,
+                "domains": self._selector_domains(config),
+                "multiple": self._selector_multiple(config),
+            }
+            for name, config in fields.items()
+        }
+        return True
+
+    @staticmethod
+    def _selector_domains(field: dict[str, Any]) -> list[str]:
+        """Return entity-domain defaults declared by a script field."""
+        entity_config = field.get("selector", {}).get("entity", {})
+        domains = entity_config.get("domain", [])
+        return [domains] if isinstance(domains, str) else domains
+
+    @staticmethod
+    def _selector_multiple(field: dict[str, Any]) -> bool:
+        """Return the multiple-target default declared by a script field."""
+        return bool(field.get("selector", {}).get("entity", {}).get("multiple", False))
+
+    def _mapping_for(self, script_field: str) -> dict[str, Any] | None:
+        """Return the mapping for one script field."""
+        return next(
+            (
+                mapping
+                for mapping in self._resolved_fields
+                if mapping["script_field"] == script_field
+            ),
+            None,
         )
-        return (
-            script_description.get("description"),
-            {
-                field_name: field_config.get("description")
-                or field_config.get("name")
-                or field_name
-                for field_name, field_config in script_description.get(
-                    "fields", {}
-                ).items()
-            },
-        )
+
+    def _available_domains(self) -> list[str]:
+        """Return domains available to map from the current Home Assistant state."""
+        return sorted({state.domain for state in self.hass.states.async_all()})
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Select the source script."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            script_entity_id = user_input[CONF_SCRIPT_ENTITY_ID]
-            if self.hass.states.get(script_entity_id) is None:
-                errors[CONF_SCRIPT_ENTITY_ID] = "script_not_found"
-            else:
-                source_description, script_fields = (
-                    await self._async_get_script_details(script_entity_id)
-                )
-                if not script_fields:
-                    errors[CONF_SCRIPT_ENTITY_ID] = "no_script_fields"
-                else:
-                    self._script_entity_id = script_entity_id
-                    self._source_description = source_description
-                    self._script_fields = script_fields
-                    return await self.async_step_tool()
-
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_SCRIPT_ENTITY_ID): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=SCRIPT_DOMAIN)
-                )
-            }
-        )
-        return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
-        )
-
-    async def async_step_tool(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Configure the LLM tool's name and description."""
-        assert self._script_entity_id is not None
-
-        if user_input is not None:
-            self._tool_name = user_input[CONF_TOOL_NAME]
-            self._description = user_input[CONF_DESCRIPTION]
-            return await self.async_step_menu()
-
-        script_name = split_entity_id(self._script_entity_id)[1]
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_TOOL_NAME, default=script_name
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-                ),
-                vol.Required(
-                    CONF_DESCRIPTION,
-                    default=self._source_description or DEFAULT_TOOL_DESCRIPTION,
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(
-                        type=selector.TextSelectorType.TEXT, multiline=True
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="tool", data_schema=data_schema)
-
-    async def async_step_menu(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Choose how to edit target field mappings."""
-        assert self._script_entity_id is not None
-        assert self._tool_name is not None
-        assert self._description is not None
-
-        configured_fields = {
-            mapping["script_field"] for mapping in self._resolved_fields
-        }
-        menu_options = ["advanced"]
-        if configured_fields != set(self._script_fields):
-            menu_options.insert(0, "add_field")
-        if self._resolved_fields:
-            menu_options.insert(-1, "edit_field")
-            menu_options.append("finish")
-
-        return self.async_show_menu(
-            step_id="menu",
-            menu_options=menu_options,
-        )
-
-    async def async_step_add_field(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Add one resolved script field with form controls."""
-        configured_fields = {
-            mapping["script_field"] for mapping in self._resolved_fields
-        }
-        available_fields = {
-            field_name: description
-            for field_name, description in self._script_fields.items()
-            if field_name not in configured_fields
-        }
-        if not available_fields:
-            return await self.async_step_menu()
-
+        """Select the source script before opening the configuration form."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            input_name = user_input["input_name"]
-            if any(
-                mapping["input_name"] == input_name
-                for mapping in self._resolved_fields
-            ):
-                errors["input_name"] = "duplicate_input_name"
-            else:
-                self._resolved_fields.append(
-                    {
-                        "input_name": input_name,
-                        "script_field": user_input["script_field"],
-                        "domains": user_input["domains"],
-                        "multiple": user_input["multiple"],
-                    }
-                )
-                return await self.async_step_menu()
-
-        domains = sorted(
-            {state.domain for state in self.hass.states.async_all()}
-        )
-        data_schema = vol.Schema(
-            {
-                vol.Required("script_field"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            selector.SelectOptionDict(
-                                value=field_name,
-                                label=f"{field_name}: {description}",
-                            )
-                            for field_name, description in available_fields.items()
-                        ]
-                    )
-                ),
-                vol.Required("input_name"): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-                ),
-                vol.Required("domains"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=domains,
-                        multiple=True,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Required("multiple", default=False): selector.BooleanSelector(),
-            }
-        )
-        return self.async_show_form(
-            step_id="add_field", data_schema=data_schema, errors=errors
-        )
-
-    async def async_step_edit_field(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Select an existing resolved field to edit."""
-        if user_input is not None:
-            self._editing_script_field = user_input["script_field"]
-            return await self.async_step_edit_field_details()
+            if await self._async_load_script(user_input[CONF_SCRIPT_ENTITY_ID]):
+                return await self.async_step_configure()
+            errors[CONF_SCRIPT_ENTITY_ID] = (
+                "script_not_found"
+                if self.hass.states.get(user_input[CONF_SCRIPT_ENTITY_ID]) is None
+                else "no_script_fields"
+            )
 
         return self.async_show_form(
-            step_id="edit_field",
+            step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required("script_field"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(
-                                    value=mapping["script_field"],
-                                    label=(
-                                        f"{mapping['script_field']}: "
-                                        f"{mapping['input_name']}"
-                                    ),
-                                )
-                                for mapping in self._resolved_fields
-                            ]
-                        )
+                    vol.Required(CONF_SCRIPT_ENTITY_ID): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain=SCRIPT_DOMAIN)
                     )
                 }
             ),
+            errors=errors,
         )
 
-    async def async_step_edit_field_details(
+    async def async_step_configure(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Edit or remove an existing resolved field."""
-        assert self._editing_script_field is not None
-        mapping = next(
-            mapping
-            for mapping in self._resolved_fields
-            if mapping["script_field"] == self._editing_script_field
+        """Configure the tool and select the next native flow action."""
+        assert self._script_entity_id is not None
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._tool_name = user_input[CONF_TOOL_NAME]
+            self._description = user_input[CONF_DESCRIPTION]
+            action = user_input["action"]
+            if action == ACTION_EDIT_PARAMETER:
+                self._editing_script_field = user_input["parameter"]
+                return await self.async_step_edit_parameter()
+            if action == ACTION_EDIT_JSON:
+                return await self.async_step_advanced()
+            return await self.async_step_finish()
+
+        defaults = self._script_fields
+        selected_parameter = next(iter(defaults))
+        script_name = split_entity_id(self._script_entity_id)[1]
+        return self.async_show_form(
+            step_id="configure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_TOOL_NAME, default=self._tool_name or script_name
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Required(
+                        CONF_DESCRIPTION,
+                        default=(
+                            self._description
+                            or self._source_description
+                            or DEFAULT_TOOL_DESCRIPTION
+                        ),
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.TEXT, multiline=True
+                        )
+                    ),
+                    vol.Required(
+                        "parameter", default=selected_parameter
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=name,
+                                    label=self._parameter_label(name, field),
+                                )
+                                for name, field in defaults.items()
+                            ]
+                        )
+                    ),
+                    vol.Required(
+                        "action", default=ACTION_SAVE
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=ACTION_SAVE, label="Save tool"
+                                ),
+                                selector.SelectOptionDict(
+                                    value=ACTION_EDIT_PARAMETER,
+                                    label="Edit selected parameter",
+                                ),
+                                selector.SelectOptionDict(
+                                    value=ACTION_EDIT_JSON,
+                                    label="Edit mappings as JSON",
+                                ),
+                            ]
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
         )
+
+    async def async_step_edit_parameter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Configure one script parameter as pass-through or mapped."""
+        assert self._editing_script_field is not None
+        field_name = self._editing_script_field
+        field = self._script_fields[field_name]
+        mapping = self._mapping_for(field_name)
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            if user_input["remove"]:
-                self._resolved_fields.remove(mapping)
-                return await self.async_step_menu()
+            if user_input["mode"] == MODE_PASSTHROUGH:
+                if mapping:
+                    self._resolved_fields.remove(mapping)
+                return await self.async_step_configure()
 
             input_name = user_input["input_name"]
             if any(
@@ -313,41 +268,70 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ):
                 errors["input_name"] = "duplicate_input_name"
             else:
-                mapping.update(
-                    input_name=input_name,
-                    domains=user_input["domains"],
-                    multiple=user_input["multiple"],
-                )
-                return await self.async_step_menu()
+                new_mapping = {
+                    "input_name": input_name,
+                    "script_field": field_name,
+                    "domains": user_input["domains"],
+                    "multiple": user_input["multiple"],
+                }
+                if mapping:
+                    mapping.update(new_mapping)
+                else:
+                    self._resolved_fields.append(new_mapping)
+                return await self.async_step_configure()
 
-        domains = sorted(
-            {state.domain for state in self.hass.states.async_all()}
-        )
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    "input_name", default=mapping["input_name"]
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-                ),
-                vol.Required(
-                    "domains", default=mapping["domains"]
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=domains,
-                        multiple=True,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Required(
-                    "multiple", default=mapping["multiple"]
-                ): selector.BooleanSelector(),
-                vol.Required("remove", default=False): selector.BooleanSelector(),
-            }
+        default_domains = (
+            mapping["domains"]
+            if mapping
+            else field["domains"] or self._available_domains()
         )
         return self.async_show_form(
-            step_id="edit_field_details", data_schema=data_schema, errors=errors
+            step_id="edit_parameter",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "mode",
+                        default=MODE_MAPPED if mapping else MODE_PASSTHROUGH,
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value=MODE_PASSTHROUGH, label="Pass through"
+                                ),
+                                selector.SelectOptionDict(
+                                    value=MODE_MAPPED, label="Resolve a target"
+                                ),
+                            ]
+                        )
+                    ),
+                    vol.Required(
+                        "input_name",
+                        default=mapping["input_name"] if mapping else field_name,
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Required(
+                        "domains", default=default_domains
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=self._available_domains(),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required(
+                        "multiple",
+                        default=mapping["multiple"] if mapping else field["multiple"],
+                    ): selector.BooleanSelector(),
+                }
+            ),
+            errors=errors,
         )
+
+    def _parameter_label(self, name: str, field: dict[str, Any]) -> str:
+        """Create the native selector label for a script parameter."""
+        status = "mapped" if self._mapping_for(name) else "pass-through"
+        return f"{name} ({status}): {field['description']}"
 
     async def async_step_advanced(
         self, user_input: dict[str, Any] | None = None
@@ -356,34 +340,33 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                resolved_fields = _validate_resolved_fields(
-                    user_input[CONF_RESOLVED_FIELDS]
-                )
+                mappings = _validate_resolved_fields(user_input[CONF_RESOLVED_FIELDS])
             except vol.Invalid as err:
                 errors[CONF_RESOLVED_FIELDS] = str(err)
             else:
-                if {
-                    mapping["script_field"] for mapping in resolved_fields
-                }.difference(self._script_fields):
+                if {mapping["script_field"] for mapping in mappings}.difference(
+                    self._script_fields
+                ):
                     errors[CONF_RESOLVED_FIELDS] = "unknown_script_field"
                 else:
-                    self._resolved_fields = resolved_fields
-                    return await self.async_step_menu()
+                    self._resolved_fields = mappings
+                    return await self.async_step_configure()
 
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_RESOLVED_FIELDS,
-                    default=json.dumps(self._resolved_fields, indent=2),
-                ): selector.TextSelector(
-                    selector.TextSelectorConfig(
-                        type=selector.TextSelectorType.TEXT, multiline=True
-                    )
-                )
-            }
-        )
         return self.async_show_form(
-            step_id="advanced", data_schema=data_schema, errors=errors
+            step_id="advanced",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_RESOLVED_FIELDS,
+                        default=json.dumps(self._resolved_fields, indent=2),
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.TEXT, multiline=True
+                        )
+                    )
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_finish(
