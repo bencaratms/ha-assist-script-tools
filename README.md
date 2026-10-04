@@ -73,3 +73,23 @@ Run the isolated Home Assistant test suite with Docker:
 ```sh
 docker compose run --build --rm test
 ```
+
+### Manual Home Assistant UI testing
+
+Run a local Home Assistant instance with the custom component mounted from this
+repository:
+
+```sh
+docker compose --profile ui up -d homeassistant
+```
+
+Open `http://localhost:8123`, complete Home Assistant's local onboarding, then
+add **Assist Script Tools** from **Settings** > **Devices & services**. The
+included `script.verify_target_resolution` supplies a safe source script for
+testing the configuration flow without controlling media.
+
+Stop the environment with:
+
+```sh
+docker compose --profile ui down
+```

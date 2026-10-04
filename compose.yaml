@@ -7,3 +7,14 @@ services:
     volumes:
       - .:/workspace:ro
     command: ["-p", "no:cacheprovider"]
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.9.4
+    profiles: ["ui"]
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./custom_components:/config/custom_components:ro
+      - ./dev/homeassistant:/config
+    environment:
+      TZ: Etc/UTC
