@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Create an Assist script tool",
-        "description": "Configure one script wrapper. Resolved fields must be JSON, for example: [{\"input_name\":\"speaker\",\"script_field\":\"media_player_entity_id\",\"domains\":[\"media_player\"],\"multiple\":false}].",
+        "description": "Configure one script wrapper. Resolved field mappings must be a JSON list. See the integration documentation for an example.",
         "data": {
           "script_entity_id": "Script",
           "tool_name": "Tool name",
