@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import voluptuous as vol
 from homeassistant.core import State
+from homeassistant.helpers import intent
 from homeassistant.helpers.llm import LLMContext, ToolInput
 
 from custom_components.assist_script_tools.const import (
@@ -120,7 +121,7 @@ async def test_tool_does_not_call_script_when_target_is_unresolved(hass) -> None
     match_result = SimpleNamespace(
         is_match=False,
         states=[],
-        no_match_reason=None,
+        no_match_reason=intent.MatchFailedReason.ASSISTANT,
     )
     llm_context = LLMContext(
         platform="test",
@@ -152,4 +153,5 @@ async def test_tool_does_not_call_script_when_target_is_unresolved(hass) -> None
 
     assert result["success"] is False
     assert result["error"] == "target_not_resolved"
+    assert result["reason"] == "assistant"
     source_tool.async_call.assert_not_awaited()

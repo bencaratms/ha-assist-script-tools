@@ -99,7 +99,7 @@ class ResolvedScriptTool(Tool):
                         "error": "target_not_resolved",
                         "field": input_name,
                         "target": name,
-                        "reason": result.no_match_reason.value
+                        "reason": result.no_match_reason.name.lower()
                         if result.no_match_reason
                         else "unknown",
                     }
