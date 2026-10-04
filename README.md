@@ -6,7 +6,7 @@ entity resolution.
 ## Why
 
 Home Assistant's native intent tools resolve a spoken target such as "Kitchen
-Nabu" to a canonical `media_player.*` entity inside Home Assistant. A script
+Speaker" to a canonical `media_player.*` entity inside Home Assistant. A script
 exposed directly to Assist instead receives the model's arguments as-is, which
 can cause an LLM to guess an entity ID.
 
@@ -50,12 +50,13 @@ Each mapping has:
    - `domains`: allowed target domains.
    - `multiple`: whether the tool may resolve more than one target.
 
-For a script accepting `media_player_entity_id`, use:
+For a script with a `media_player_entity_id` source field, expose
+`media_player` to the LLM:
 
 ```json
 [
   {
-    "input_name": "speaker",
+    "input_name": "media_player",
     "script_field": "media_player_entity_id",
     "domains": ["media_player"],
     "multiple": false
@@ -63,7 +64,8 @@ For a script accepting `media_player_entity_id`, use:
 ]
 ```
 
-The LLM sees `speaker`, not `media_player_entity_id`; a call with `"Kitchen
+The LLM sees `media_player`, not `media_player_entity_id`; the latter remains
+only the source script field. A call with `"Kitchen
 Speaker"` is resolved by Home Assistant before the script receives
 `media_player.kitchen_speaker`.
 
