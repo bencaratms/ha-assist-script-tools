@@ -3,20 +3,70 @@
     "step": {
       "user": {
         "title": "Create an Assist script tool",
-        "description": "Configure one script wrapper. Resolved field mappings must be a JSON list. See the integration documentation for an example.",
+        "description": "Select the script to wrap.",
         "data": {
-          "script_entity_id": "Script",
+          "script_entity_id": "Script"
+        }
+      },
+      "tool": {
+        "title": "Configure the Assist tool",
+        "description": "The description defaults to the selected script's description.",
+        "data": {
           "tool_name": "Tool name",
-          "description": "Tool description",
+          "description": "Tool description"
+        }
+      },
+      "menu": {
+        "title": "Configure resolved fields",
+        "description": "Fields mapped for target resolution: {mapped_fields}",
+        "menu_options": {
+          "add_field": "Add a resolved field",
+          "edit_field": "Edit or remove a resolved field",
+          "advanced": "Edit mappings as JSON",
+          "finish": "Finish"
+        }
+      },
+      "add_field": {
+        "title": "Add a resolved field",
+        "description": "Choose a script field and the LLM-facing name that will receive a human-friendly target.",
+        "data": {
+          "script_field": "Script field",
+          "input_name": "LLM parameter name",
+          "domains": "Allowed entity domains",
+          "multiple": "Allow multiple targets"
+        }
+      },
+      "edit_field": {
+        "title": "Choose a resolved field",
+        "data": {
+          "script_field": "Resolved script field"
+        }
+      },
+      "edit_field_details": {
+        "title": "Edit resolved field",
+        "data": {
+          "input_name": "LLM parameter name",
+          "domains": "Allowed entity domains",
+          "multiple": "Allow multiple targets",
+          "remove": "Remove this resolved field"
+        }
+      },
+      "advanced": {
+        "title": "Edit resolved fields as JSON",
+        "description": "This replaces the mappings configured through the guided form. Return to the previous menu to continue editing with the form.",
+        "data": {
           "resolved_fields": "Resolved field mappings"
         }
       }
     },
     "error": {
       "script_not_found": "The selected script does not exist.",
+      "no_script_fields": "The selected script does not declare any fields.",
+      "duplicate_input_name": "That LLM parameter name is already in use.",
       "invalid_json": "Resolved field mappings must be valid JSON.",
       "not_a_list": "Resolved field mappings must be a JSON list.",
-      "invalid_mapping": "Each mapping needs unique input_name and script_field strings, a non-empty domains list, and an optional boolean multiple value."
+      "invalid_mapping": "Each mapping needs unique input_name and script_field strings, a non-empty domains list, and an optional boolean multiple value.",
+      "unknown_script_field": "Each mapped script field must be declared by the selected script."
     }
   }
 }

@@ -31,9 +31,16 @@ with the matched canonical entity ID.
 
 Create one integration entry for each script to expose:
 
-1. Select the existing `script.*` entity.
-2. Provide a concise tool name and description.
-3. Configure resolved fields as JSON. Each mapping has:
+1. Select the existing `script.*` entity, then provide a concise tool name and
+   description.
+2. Select **Add a resolved field** for each script parameter that needs
+   human-friendly entity resolution. The form populates its script-field options
+   from the selected script and its domain options from your existing entities.
+3. Select **Edit mappings as JSON** for bulk editing. Saving the JSON replaces
+   the same mappings shown in the guided form, so you can switch between either
+   view without losing changes.
+
+Each mapping has:
    - `input_name`: the human-friendly LLM parameter.
    - `script_field`: the parameter accepted by the source script.
    - `domains`: allowed target domains.
@@ -53,8 +60,8 @@ For a script accepting `media_player_entity_id`, use:
 ```
 
 The LLM sees `speaker`, not `media_player_entity_id`; a call with `"Kitchen
-Nabu"` is resolved by Home Assistant before the script receives
-`media_player.kitchen_nabu`.
+Speaker"` is resolved by Home Assistant before the script receives
+`media_player.kitchen_speaker`.
 
 Disable the source script's own Assist exposure so the model cannot choose the
 unsafe raw-ID tool instead of the wrapper.

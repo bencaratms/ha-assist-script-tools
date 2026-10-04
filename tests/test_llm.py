@@ -53,9 +53,9 @@ async def test_tool_resolves_name_before_calling_script(hass) -> None:
         is_match=True,
         states=[
             State(
-                "media_player.kitchen_nabu",
+                "media_player.kitchen_speaker",
                 "idle",
-                {"friendly_name": "Kitchen Nabu"},
+                {"friendly_name": "Kitchen Speaker"},
             )
         ],
         no_match_reason=None,
@@ -84,7 +84,7 @@ async def test_tool_resolves_name_before_calling_script(hass) -> None:
             hass,
             ToolInput(
                 tool_name=tool.name,
-                tool_args={"speaker": "Kitchen Nabu"},
+                tool_args={"speaker": "Kitchen Speaker"},
             ),
             llm_context,
         )
@@ -98,14 +98,14 @@ async def test_tool_resolves_name_before_calling_script(hass) -> None:
     assert result["resolved_targets"] == {
         "speaker": [
             {
-                "entity_id": "media_player.kitchen_nabu",
-                "name": "Kitchen Nabu",
+                "entity_id": "media_player.kitchen_speaker",
+                "name": "Kitchen Speaker",
             }
         ]
     }
     assert match_targets.call_args.args[1].domains == {"media_player"}
     assert source_tool.async_call.call_args.args[1].tool_args == {
-        "media_player_entity_id": "media_player.kitchen_nabu"
+        "media_player_entity_id": "media_player.kitchen_speaker"
     }
 
 
@@ -145,7 +145,7 @@ async def test_tool_does_not_call_script_when_target_is_unresolved(hass) -> None
             hass,
             ToolInput(
                 tool_name=tool.name,
-                tool_args={"speaker": "Kitchen Nabu"},
+                tool_args={"speaker": "Kitchen Speaker"},
             ),
             llm_context,
         )
