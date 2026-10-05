@@ -22,3 +22,19 @@ script:
             domain: input_boolean
     sequence:
       - stop: Target received.
+
+  verify_music_assistant_target_resolution:
+    alias: Verify Music Assistant target resolution
+    description: Verify a Music Assistant media-player target without controlling it.
+    fields:
+      media_player_entity_id:
+        name: Media Player
+        description: Music Assistant media-player entity to verify.
+        required: true
+        selector:
+          entity:
+            filter:
+              - domain: media_player
+                integration: music_assistant
+    sequence:
+      - stop: Music Assistant target received.

@@ -7,8 +7,9 @@ from typing import Any, override
 import voluptuous as vol
 from homeassistant.components.llm import LLMTools
 from homeassistant.components.script.llm import ScriptTool
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import intent
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.llm import (
     LLM_API_ASSIST,
     LLMContext,
@@ -67,6 +68,23 @@ class ResolvedScriptTool(Tool):
 
         self.parameters = vol.Schema(schema)
 
+    @staticmethod
+    def _states_for_integrations(
+        hass: HomeAssistant, mapping: dict[str, Any]
+    ) -> list[State] | None:
+        """Return candidate states restricted to configured integrations."""
+        integrations = mapping.get("integrations")
+        if not integrations:
+            return None
+
+        entity_registry = async_get_entity_registry(hass)
+        return [
+            state
+            for state in hass.states.async_all(set(mapping["domains"]))
+            if (entity_entry := entity_registry.async_get(state.entity_id))
+            and entity_entry.platform in integrations
+        ]
+
     @override
     async def async_call(
         self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
@@ -91,7 +109,10 @@ class ResolvedScriptTool(Tool):
                     single_target=not mapping["multiple"],
                 )
                 result = intent.async_match_targets(
-                    hass, constraints, intent.MatchTargetsPreferences()
+                    hass,
+                    constraints,
+                    intent.MatchTargetsPreferences(),
+                    states=self._states_for_integrations(hass, mapping),
                 )
                 if not result.is_match:
                     return {

@@ -48,6 +48,7 @@ Each mapping has:
      spaces; use letters, numbers, and underscores.
    - `script_field`: the parameter accepted by the source script.
    - `domains`: allowed target domains.
+   - `integrations`: optional allowed integration domains.
    - `multiple`: whether the tool may resolve more than one target.
 
 For a script with a `media_player_entity_id` source field, expose
@@ -59,6 +60,7 @@ For a script with a `media_player_entity_id` source field, expose
     "input_name": "media_player",
     "script_field": "media_player_entity_id",
     "domains": ["media_player"],
+    "integrations": ["music_assistant"],
     "multiple": false
   }
 ]
@@ -91,9 +93,11 @@ docker compose --profile ui up -d homeassistant
 
 Open `http://localhost:8123`, complete Home Assistant's local onboarding, then
 add **Assist Script Tools** from **Settings** > **Devices & services**. The
-included `script.verify_target_resolution` and `input_boolean.kitchen_speaker`
-supply a safe source script and target for testing the configuration flow
-without controlling devices.
+included `script.verify_target_resolution`,
+`script.verify_music_assistant_target_resolution`, and
+`input_boolean.kitchen_speaker` supply safe source scripts and a target for
+testing the configuration flow without controlling devices. The Music Assistant
+script includes the `media_player` and `music_assistant` entity-selector filter.
 
 Stop the environment with:
 

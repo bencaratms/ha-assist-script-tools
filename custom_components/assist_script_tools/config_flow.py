@@ -46,6 +46,9 @@ def _validate_resolved_fields(value: str) -> list[dict[str, Any]]:
             mapping.get("script_field") if isinstance(mapping, dict) else None
         )
         domains = mapping.get("domains") if isinstance(mapping, dict) else None
+        integrations = (
+            mapping.get("integrations") if isinstance(mapping, dict) else None
+        )
         multiple = mapping.get("multiple", False) if isinstance(mapping, dict) else None
         if (
             not isinstance(input_name, str)
@@ -57,6 +60,16 @@ def _validate_resolved_fields(value: str) -> list[dict[str, Any]]:
             or not all(
                 isinstance(domain, str) and domain.isidentifier()
                 for domain in domains
+            )
+            or (
+                integrations is not None
+                and (
+                    not isinstance(integrations, list)
+                    or not all(
+                        isinstance(integration, str) and integration.isidentifier()
+                        for integration in integrations
+                    )
+                )
             )
             or not isinstance(multiple, bool)
             or input_name in input_names
@@ -119,6 +132,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 or config.get("name")
                 or name,
                 "domains": self._selector_domains(config),
+                "integrations": self._selector_integrations(config),
                 "multiple": self._selector_multiple(config),
             }
             for name, config in fields.items()
@@ -128,9 +142,37 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def _selector_domains(field: dict[str, Any]) -> list[str]:
         """Return entity-domain defaults declared by a script field."""
+        return ConfigFlow._selector_filter_values(field, "domain")
+
+    @staticmethod
+    def _selector_integrations(field: dict[str, Any]) -> list[str]:
+        """Return integration defaults declared by a script field."""
+        return ConfigFlow._selector_filter_values(field, "integration")
+
+    @staticmethod
+    def _selector_filter_values(field: dict[str, Any], key: str) -> list[str]:
+        """Return string values for an entity selector filter property."""
         entity_config = field.get("selector", {}).get("entity", {})
-        domains = entity_config.get("domain", [])
-        return [domains] if isinstance(domains, str) else domains
+        filters = entity_config.get("filter", [])
+        if isinstance(filters, dict):
+            filters = [filters]
+
+        values = entity_config.get(key, [])
+        values = [values] if isinstance(values, str) else values
+        if not isinstance(values, list):
+            values = []
+
+        for selector_filter in filters:
+            if not isinstance(selector_filter, dict):
+                continue
+            filter_values = selector_filter.get(key, [])
+            filter_values = (
+                [filter_values] if isinstance(filter_values, str) else filter_values
+            )
+            if isinstance(filter_values, list):
+                values.extend(filter_values)
+
+        return list(dict.fromkeys(value for value in values if isinstance(value, str)))
 
     @staticmethod
     def _selector_multiple(field: dict[str, Any]) -> bool:
@@ -151,6 +193,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _available_domains(self) -> list[str]:
         """Return domains available to map from the current Home Assistant state."""
         return sorted({state.domain for state in self.hass.states.async_all()})
+
+    def _available_integrations(self) -> list[str]:
+        """Return configured integration domains available to map."""
+        return sorted(
+            {entry.domain for entry in self.hass.config_entries.async_entries()}
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -289,8 +337,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "domains": user_input["domains"],
                     "multiple": user_input["multiple"],
                 }
+                if integrations := user_input.get("integrations"):
+                    new_mapping["integrations"] = integrations
                 if mapping:
                     mapping.update(new_mapping)
+                    if not integrations:
+                        mapping.pop("integrations", None)
                 else:
                     self._resolved_fields.append(new_mapping)
                 return await self.async_step_configure()
@@ -299,6 +351,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             mapping["domains"]
             if mapping
             else field["domains"] or self._available_domains()
+        )
+        default_integrations = (
+            mapping.get("integrations", []) if mapping else field["integrations"]
         )
         return self.async_show_form(
             step_id="edit_parameter",
@@ -330,6 +385,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=self._available_domains(),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        "integrations", default=default_integrations
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=self._available_integrations(),
                             multiple=True,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
@@ -433,9 +497,12 @@ class ScriptToolOptionsFlow(config_entries.OptionsFlow):
     _initialize_flow_state = ConfigFlow._initialize_flow_state
     _async_load_script = ConfigFlow._async_load_script
     _selector_domains = staticmethod(ConfigFlow._selector_domains)
+    _selector_integrations = staticmethod(ConfigFlow._selector_integrations)
+    _selector_filter_values = staticmethod(ConfigFlow._selector_filter_values)
     _selector_multiple = staticmethod(ConfigFlow._selector_multiple)
     _mapping_for = ConfigFlow._mapping_for
     _available_domains = ConfigFlow._available_domains
+    _available_integrations = ConfigFlow._available_integrations
     _parameter_label = ConfigFlow._parameter_label
     _existing_entry = ConfigFlow._existing_entry
     async_step_configure = ConfigFlow.async_step_configure

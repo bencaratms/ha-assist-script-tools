@@ -30,11 +30,13 @@ SCRIPT_FIELDS = {
     "target_entity_id": {
         "description": "Canonical entity ID to verify.",
         "domains": ["input_boolean"],
+        "integrations": [],
         "multiple": False,
     },
     "message": {
         "description": "Optional message for the target.",
         "domains": [],
+        "integrations": [],
         "multiple": False,
     },
 }
@@ -113,6 +115,7 @@ async def test_primary_form_maps_parameter_and_creates_entry(hass) -> None:
                 "mode": MODE_MAPPED,
                 "input_name": MAPPING["input_name"],
                 "domains": MAPPING["domains"],
+                "integrations": [],
                 "multiple": MAPPING["multiple"],
             },
         )
@@ -152,6 +155,60 @@ async def test_json_editor_returns_to_primary_form(hass) -> None:
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "configure"
+
+
+def test_selector_filter_defaults() -> None:
+    """Read domain and integration defaults from an entity selector filter."""
+    field = {
+        "selector": {
+            "entity": {
+                "filter": [
+                    {
+                        "domain": "media_player",
+                        "integration": "music_assistant",
+                    }
+                ]
+            }
+        }
+    }
+
+    assert ConfigFlow._selector_domains(field) == ["media_player"]
+    assert ConfigFlow._selector_integrations(field) == ["music_assistant"]
+
+
+async def test_editing_mapping_removes_cleared_integrations(hass) -> None:
+    """Clear an existing integration filter when its selector is empty."""
+    flow = ConfigFlow()
+    flow.hass = hass
+    hass.states.async_set("input_boolean.kitchen_speaker", "off")
+    flow._script_entity_id = "script.verify_target_resolution"
+    flow._editing_script_field = "target_entity_id"
+    flow._script_fields = SCRIPT_FIELDS
+    flow._resolved_fields = [{**MAPPING, "integrations": ["music_assistant"]}]
+
+    result = await flow.async_step_edit_parameter(
+        {
+            "mode": MODE_MAPPED,
+            "input_name": MAPPING["input_name"],
+            "domains": MAPPING["domains"],
+            "integrations": [],
+            "multiple": MAPPING["multiple"],
+        }
+    )
+
+    assert result["step_id"] == "configure"
+    assert flow._resolved_fields == [MAPPING]
+
+    result = await flow.async_step_edit_parameter()
+
+    assert result["data_schema"](
+        {
+            "mode": MODE_MAPPED,
+            "input_name": MAPPING["input_name"],
+            "domains": MAPPING["domains"],
+            "multiple": MAPPING["multiple"],
+        }
+    )["integrations"] == []
 
 
 async def test_duplicate_wrapper_returns_to_configuration_form(hass) -> None:
