@@ -9,15 +9,16 @@ import voluptuous as vol
 from homeassistant.core import State
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from homeassistant.helpers.llm import LLMContext, ToolInput
+from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext, ToolInput
 
 from custom_components.assist_script_tools.const import (
     CONF_DESCRIPTION,
     CONF_RESOLVED_FIELDS,
     CONF_SCRIPT_ENTITY_ID,
     CONF_TOOL_NAME,
+    DOMAIN,
 )
-from custom_components.assist_script_tools.llm import ResolvedScriptTool
+from custom_components.assist_script_tools.llm import ResolvedScriptTool, async_get_tools
 
 
 def _entry_data() -> dict[str, object]:
@@ -35,6 +36,41 @@ def _entry_data() -> dict[str, object]:
             }
         ],
     }
+
+
+async def test_registered_tools_identify_their_integration(hass) -> None:
+    """Every configured tool identifies the integration that provides it."""
+    first = _entry_data()
+    second = {**_entry_data(), CONF_TOOL_NAME: "another_flash"}
+    hass.data[DOMAIN] = {
+        "first": SimpleNamespace(data=first),
+        "second": SimpleNamespace(data=second),
+    }
+    hass.states.async_set("script.news_flash", "off")
+    source_tool = MagicMock()
+    source_tool.parameters = vol.Schema(
+        {vol.Required("media_player_entity_id"): str}
+    )
+    llm_context = LLMContext(
+        platform="test",
+        context=None,
+        language="en",
+        assistant="conversation",
+        device_id=None,
+    )
+
+    with patch(
+        "custom_components.assist_script_tools.llm.ScriptTool",
+        return_value=source_tool,
+    ):
+        tools = async_get_tools(hass, llm_context, LLM_API_ASSIST)
+
+    assert tools is not None
+    assert {tool.name for tool in tools.tools} == {
+        "assist_script_tools__news_flash",
+        "assist_script_tools__another_flash",
+    }
+    assert all(tool.integration == DOMAIN for tool in tools.tools)
 
 
 async def test_tool_resolves_name_before_calling_script(hass) -> None:

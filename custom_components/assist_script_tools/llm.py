@@ -29,6 +29,8 @@ from .const import (
 class ResolvedScriptTool(Tool):
     """Wrap a script tool with Core target resolution."""
 
+    integration = DOMAIN
+
     def __init__(self, hass: HomeAssistant, entry_data: dict[str, Any]) -> None:
         """Initialize the configured wrapper."""
         self._source = ScriptTool(hass, entry_data[CONF_SCRIPT_ENTITY_ID])
